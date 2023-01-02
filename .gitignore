@@ -3,11 +3,12 @@
 !.git*
 !.editorconfig
 !.nojekyll
+!.travis.yml
 !.husky
 !.commitlintrc.json
 !.versionrc.json
 !.stylelintrc.json
-
+Gemfile.lock
 # bundler cache
 _site
 vendor
