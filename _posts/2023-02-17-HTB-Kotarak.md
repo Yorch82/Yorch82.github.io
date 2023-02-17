@@ -430,7 +430,7 @@ print "Serving wget exploit on port %s...\n\n" % HTTP_LISTEN_PORT
 handler.serve_forever()
 ```
 
-Como necesitamos dos consolas para ejecutar el ataque nos abrimos una sesión con Tmux con el comando `tmux new -s pwned` y spliteamos la consola con `Ctrl+b / Shift+2`. En una consola ejecutamos `authbind wget-exploit.py` y en la otra `authbind python -m pyftpdlib -p21 -w`. Nos ponemos en escucha en el puerto 443 y esperamos que surja la magia
+Como necesitamos dos consolas para ejecutar el ataque nos abrimos una sesión con Tmux con el comando `tmux new -s pwned` y spliteamos la consola con `Ctrl+b / Shift+2`. En una consola ejecutamos `authbind wget-exploit.py` y en la otra `authbind python -m pyftpdlib -p21 -w`. Nos ponemos en escucha en el puerto 443 y esperamos que surja la magia. Accedemos al contenedor y localiazamos la flag que nos faltaba
 
 <img src="/assets/HTB/kotarak/attack.png">
 
