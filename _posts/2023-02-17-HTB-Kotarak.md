@@ -237,7 +237,7 @@ Administrator:aes128-cts-hmac-sha1-96:e2a25474aa9eb0e1525d0f50233c0274
 
 Conseguimos extraer los hashes de varios usuarios. Con la ayuda de la página [CrackStation](https://crackstation.net/) logramos conseguir en texto claro un par de contraseñas
 
-<img src="/assets/HTB/kotarak/crack.png">
+<img src="/assets/HTB/Kotarak/crack.png">
 
 Con la primera contraseña obtenida logramos migrar al usuario `atanas`. La flag la encontramos en su directorio personal
 
@@ -430,9 +430,9 @@ print "Serving wget exploit on port %s...\n\n" % HTTP_LISTEN_PORT
 handler.serve_forever()
 ```
 
-Como necesitamos dos consolas para ejecutar el ataque nos abrimos una sesión con Tmux con el comando `tmux new -s pwned` y spliteamos la consola con `Ctrl+b / Shift+2`. En una consola ejecutamos `authbind wget-exploit.py` y en la otra `authbind python -m pyftpdlib -p21 -w`. Nos ponemos en escucha en el puerto 443 y esperamos que surja la magia. Accedemos al contenedor y localiazamos la flag que nos faltaba
+Como necesitamos dos consolas para ejecutar el ataque nos abrimos una sesión con Tmux con el comando `tmux new -s pwned` y spliteamos la consola con `Ctrl+b / Shift+2`. En una consola ejecutamos `authbind wget-exploit.py` y en la otra `authbind python -m pyftpdlib -p21 -w`. Nos ponemos en escucha en el puerto 443 y esperamos que surja la magia. Accedemos al contenedor y localiazamos la flag que nos faltaba.
 
-<img src="/assets/HTB/kotarak/attack.png">
+<img src="/assets/HTB/Kotarak/attack.png">
 
 ```bash
 ❯ nc -nlvp 443
@@ -449,4 +449,4 @@ root
 
 Hemos completado la máquina **Kotarak** de HackTheBox!! Happy Hacking!!
 
-<img src="/assets/HTB/kotarak/pwned.png">
+<img src="/assets/HTB/Kotarak/pwned.png">
