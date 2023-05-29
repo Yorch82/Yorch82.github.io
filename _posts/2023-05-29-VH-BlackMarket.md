@@ -1,6 +1,6 @@
 ---
 title: VH - BlackMarket
-published: false
+published: true
 categories: [Linux]
 tags: [eWPT, Fácil]
 ---
