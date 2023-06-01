@@ -1,0 +1,264 @@
+---
+title: HTB - Sauna
+published: true
+categories: [Linux]
+tags: [OSCP, OSEP, AD, Fácil]
+---
+
+
+<img src="/assets/HTB/Sauna/sauna.png">
+
+
+¡Hola!
+Vamos a resolver de la máquina `Sauna` de dificultad "Fácil" de la plataforma [HackTheBox](https://hackthebox.com/).
+
+Técnicas Vistas: 
+
+- **Information Leakage**
+- **Kerberos User Enumeration - Kerbrute**
+- **ASRepRoast Attack (GetNPUsers)**
+- **Cracking Hashes**
+- **System Enumeration - WinPEAS**
+- **AutoLogon Credentials**
+- **BloodHound - SharpHound.ps1**
+- **DCSync Attack - Secretsdump [Privilege Escalation]**
+- **PassTheHash**
+
+### Preparación Entorno
+
+* * *
+
+Antes de iniciar la fase de enumeración y reconocimiento procederemos a crear un directorio de trabajo con el nombre `Sauna`. Una vez creado accedemos al directorio y con la ayuda de la función que tenemos definida en la zshrc `mkt` crearemos cuatro directorios de trabajo `nmap, content, exploits y scripts` donde almacenaremos de una manera ordenada toda la información que vayamos recopilando de la máquina en función de su naturaleza.
+
+```bash
+function mkt(){
+    mkdir {nmap,content,exploits,scripts}
+}
+```
+
+### Enumeración
+
+* * *
+
+## Nmap
+
+Accedemos al directorio de trabajo `nmap` e iniciamos nuestra fase de reconocimiento realizando un `ping` a la IP de la máquina para comprobar que esté activa y detectamos su sistema operativo basándonos en el `ttl` de una traza **ICMP**.
+
+```bash
+❯ ping -c 1 10.10.10.175
+PING 10.10.10.175 (10.10.10.175) 56(84) bytes of data.
+64 bytes from 10.10.10.175: icmp_seq=1 ttl=127 time=37.6 ms
+
+--- 10.10.10.175 ping statistics ---
+1 packets transmitted, 1 received, 0% packet loss, time 0ms
+rtt min/avg/max/mdev = 37.594/37.594/37.594/0.000 ms
+```
+Identificamos que es una maquina **Windows** debido a su ttl (time to live) correspondiente a 127 (Disminuye en 1 debido a que realiza un salto adicional en el entorno de HackTHeBox).
+
+* TTL => 64 Linux
+* TTL => 128 Windows
+
+Continuamos con la enumeración de los **65535** puertos en la máquina.
+
+```ruby
+❯ nmap -p- --open -sS --min-rate 5000 -n -v -Pn 10.10.10.175 -oG allPorts
+Host discovery disabled (-Pn). All addresses will be marked 'up' and scan times may be slower.
+Starting Nmap 7.93 ( https://nmap.org ) at 2023-06-01 10:28 CEST
+Initiating SYN Stealth Scan at 10:28
+Scanning 10.10.10.175 [65535 ports]
+Discovered open port 139/tcp on 10.10.10.175
+Discovered open port 135/tcp on 10.10.10.175
+Discovered open port 445/tcp on 10.10.10.175
+Discovered open port 389/tcp on 10.10.10.175
+Discovered open port 593/tcp on 10.10.10.175
+Discovered open port 49673/tcp on 10.10.10.175
+Discovered open port 464/tcp on 10.10.10.175
+Discovered open port 88/tcp on 10.10.10.175
+Discovered open port 636/tcp on 10.10.10.175
+Discovered open port 49674/tcp on 10.10.10.175
+Completed SYN Stealth Scan at 10:29, 26.61s elapsed (65535 total ports)
+Nmap scan report for 10.10.10.175
+Host is up (0.064s latency).
+Not shown: 65525 filtered tcp ports (no-response)
+Some closed ports may be reported as filtered due to --defeat-rst-ratelimit
+PORT      STATE SERVICE
+88/tcp    open  kerberos-sec
+135/tcp   open  msrpc
+139/tcp   open  netbios-ssn
+389/tcp   open  ldap
+445/tcp   open  microsoft-ds
+464/tcp   open  kpasswd5
+593/tcp   open  http-rpc-epmap
+636/tcp   open  ldapssl
+49673/tcp open  unknown
+49674/tcp open  unknown
+```
+Luego de identificar los puertos abiertos `OPEN`, se procede a escanear servicios y versiones que puedan estar corriendo en los puertos abiertos detectados.
+
+```ruby
+❯ nmap -sCV -p53,80,88,135,389,445,464,593,636,3268,3269,5985,9389,49667,49673,49674,49676,49698 10.10.10.175 -oN targeted
+Starting Nmap 7.93 ( https://nmap.org ) at 2023-06-01 10:29 CEST
+Nmap scan report for EGOTISTICAL-BANK.LOCAL (10.10.10.175)
+Host is up (0.036s latency).
+
+PORT      STATE    SERVICE          VERSION
+53/tcp    open     domain           Simple DNS Plus
+80/tcp    open     http             Microsoft IIS httpd 10.0
+| http-methods: 
+|_  Potentially risky methods: TRACE
+|_http-server-header: Microsoft-IIS/10.0
+|_http-title: Egotistical Bank :: Home
+88/tcp    open     kerberos-sec     Microsoft Windows Kerberos (server time: 2023-06-01 15:29:40Z)
+135/tcp   open     msrpc            Microsoft Windows RPC
+389/tcp   open     ldap             Microsoft Windows Active Directory LDAP (Domain: EGOTISTICAL-BANK.LOCAL0., Site: Default-First-Site-Name)
+445/tcp   open     microsoft-ds?
+464/tcp   open     kpasswd5?
+593/tcp   open     ncacn_http       Microsoft Windows RPC over HTTP 1.0
+636/tcp   open     tcpwrapped
+3268/tcp  filtered globalcatLDAP
+3269/tcp  filtered globalcatLDAPssl
+5985/tcp  open     http             Microsoft HTTPAPI httpd 2.0 (SSDP/UPnP)
+|_http-server-header: Microsoft-HTTPAPI/2.0
+|_http-title: Not Found
+9389/tcp  open     mc-nmf           .NET Message Framing
+49667/tcp open     msrpc            Microsoft Windows RPC
+49673/tcp open     ncacn_http       Microsoft Windows RPC over HTTP 1.0
+49674/tcp open     msrpc            Microsoft Windows RPC
+49676/tcp filtered unknown
+49698/tcp filtered unknown
+Service Info: Host: SAUNA; OS: Windows; CPE: cpe:/o:microsoft:windows
+```
+
+El escaneo nos revela un dominio `EGOTISTICAL-BANK.LOCAL` el cual incorporamos a nuestro `/etc/hosts`. También obervamos la presencia de `Internet Information Services (IIS)` y `LDAP` que están corriendo por sus respectivos puertos (80 y 389) los cuales pueden ser enumerados.
+
+## Web
+
+Accedemos al servicio web y obaservamos la página de un banco que ofrece servicios financieros.
+
+<img src="/assets/HTB/Sauna/web.png">
+
+Enumerando la web observamos en la sección `About Us` se encuentran fotos y nombres de empleados de esta empresa.
+
+<img src="/assets/HTB/Sauna/team.png">
+
+Procedemos a crear nuestro diccionario personalizado de usuarios potenciales del dominio.
+
+<img src="/assets/HTB/Sauna/users.png">
+
+## Kerbrute
+
+En este punto vamos a usar **Kerbrute** para verificar si hay algún usuario válido en nuestra lista. Kerbrute es una herramienta escrita por [ropnop](https://twitter.com/ropnop) que permite realizar fuerza bruta y enumerar cuentas validas en el directorio activo a través del mensaje AS-REQ y la Pre-Autenticación de Kerberos.
+
+<img src="/assets/HTB/Sauna/kerbrute.png">
+
+Ahora sabemos que el usuario `fsmith` es un usuario válido del dominio.
+
+## Ataque ASRepRoast
+
+Procedemos a realizar un ataque **ASRepRoast**. Este ataque busca usuarios sin el atributo requerido de autenticación previa de Kerberos **(DONT_REQ_PREAUTH)**. Eso significa que cualquiera puede enviar una solicitud `AS_REQ` al DC en nombre de cualquiera de esos usuarios y recibir un mensaje `AS_REP`. Este último tipo de mensaje contiene una parte de los datos cifrados con la clave de usuario original, derivados de su contraseña. Luego, al usar este mensaje, la contraseña del usuario podría descifrarse sin conexión.
+
+Para ejecutar este ataque nos serviremos de la herramienta `GetNPUsers` de la suite de Impacket. Obetenemos un hash para el usuario fsmith.
+
+<img src="/assets/HTB/Sauna/aspreproast.png">
+
+## Hashcat
+
+Una vez obtenido el hash procedemos a crackearlo con la herramienta `hashcat` y el diccionario `rockyou.txt`. Ejecutamos de la siguiente forma:
+
+```bash
+❯ hashcat -m 18200 -a 0 kerbhash /usr/share/wordlists/rockyou.txt --force
+```
+
+<img src="/assets/HTB/Sauna/hashcat.png">
+
+Hemos obtenido la contraseña del usuario fsmith en texto claro. Validamos con `crackmapexec` que es válida pero no vemos la flag de `(Pwn3d!)`. Recordemos que el puerto 5985 está abierto por lo que procedemos a verificar con la misma herramienta si podemos conectarnos al servicio de administración remota de Windows. En este caso si observamos la flag correspondiente.
+
+<img src="/assets/HTB/Sauna/crackmapexecvalidation.png">
+
+En este punto accedemos a la máquina víctima con la herramienta `evil-winrm`
+
+<img src="/assets/HTB/Sauna/winrm.png">
+
+Obtenemos la flag de usuario en `C:\Users\fsmith\Dsktop\user.txt`
+
+<img src="/assets/HTB/Sauna/flaguser.png">
+
+### Escalada Privilegios
+
+* * *
+
+## Enumeración WinPEAS
+
+Después de una enumeración básica no localizamos ninguna información relevante salvo la lista de usuarios del dominio.
+
+<img src="/assets/HTB/Sauna/domainusers.png">
+
+Procedemos a subir a la máquina víctima la herramienta [WinPEAS](https://github.com/carlospolop/PEASS-ng/tree/master/winPEAS) para realizar una enumeración más profunda. 
+
+<img src="/assets/HTB/Sauna/winpeas.png">
+
+Observando los resultados localizamos las credenciales para el usuario `svc-loanmgr`
+
+<img src="/assets/HTB/Sauna/loanmgr.png">
+
+Validamos las credenciales con `crackmapexec`
+
+<img src="/assets/HTB/Sauna/loancrack.png">
+
+Nos conectamos al servicio de administración remota de Windows con el usuario `svc-loanmgr` y tras enumerar privilegios y grupos no logramos infrmación relevante. En este punto nos haremos servir de la herramienta `BloodHound` para realizar una enumeración más profunda y buscar otros vectores de ataque y conseguir elevar nuestros privilegios.
+
+## BloodHound
+
+BloodHound utiliza la teoría de grafos para revelar las relaciones ocultas y, a menudo, no deseadas dentro de un entorno de Active Directory o Azure. Los atacantes pueden usar BloodHound para identificar fácilmente rutas de ataque altamente complejas que de otro modo serían imposibles de identificar rápidamente.
+
+Puedes revisar la documentación para ver como se instala y configura [BloodHound](https://www.kali.org/tools/bloodhound/#tool-documentation).
+
+Arrancamos el servidor `neo4j`
+
+<img src="/assets/HTB/Sauna/neo4j.png">
+
+Seguidamente podemos ejecutar `bloodhound`
+
+<img src="/assets/HTB/Sauna/bloodhound.png">
+
+En este punto tenemos que recolectar toda la información posible de la máquina víctima y depositarla en un comprimido zip el cual abriremos con la herramienta BloodHound. Para ello utilizaremos un script de PowerShell llamado [SharpHound](https://github.com/puckiestyle/powershell/blob/master/SharpHound.ps1). Lo descargamos y subimos a la máquina víctima.
+
+<img src="/assets/HTB/Sauna/sharpupload.png">
+
+Ahora tenemos que invocar al script de la siguiente forma:
+
+<img src="/assets/HTB/Sauna/invoke.png">
+
+El siguiente paso es descargarnos el comprimido zip generado y lo abrimos con BloodHound
+
+<img src="/assets/HTB/Sauna/download.png">
+
+<img src="/assets/HTB/Sauna/bloodzip.png">
+
+Ahora que tenemos toda la información cargada en BloodHound podemos realizar consultas como saber que usuarios son AS-REP Roaestables, que usuarios son Kerberoastebales, cual es la forma más rápida para convertirte en usuario administrador del dominio, etc.
+
+A través de BloodHound logramos saber que el usuario `svc-loanmgr` tiene las propiedades `GetChanges` y `GetChangesAll` sobre el dominio `EGOTISTICAL-BANK.LOCAL`. BloodHound nos revela que a través de la propiedad `GetChangesAll` podemos ejecutar un ataque **DCSync**
+
+<img src="/assets/HTB/Sauna/svcblood.png">
+
+## Ataque DCSync
+
+Con la herramienta `secretsdump` de la suite de Impacket para ejecutar el ataque de la siguiente forma:
+
+<img src="/assets/HTB/Sauna/dcsyn.png">
+
+Hemos obtenido el hash del usuario `Administrator`
+
+## Pass The Hash
+
+Una vez obtenido el hash del usuario Asministrator procedemos a ejcutar un ataque `Pass The Hash`  con la herramienta `psexec` sin la necesidad de crackear el hash logramos conectarnos a la máquina víctima con máximos privilegios.
+
+<img src="/assets/HTB/Sauna/passhash.png">
+
+La flag de altos privilegios la encontramos en la ruta `C:\Users\Administrator\Desktop\root.txt`
+
+<img src="/assets/HTB/Sauna/flagroot.png">
+
+Hemos completado la máquina **Sauna** de HackTheBox!! Happy Hacking!!
+
+<img src="/assets/HTB/Sauna/pwned.png">
