@@ -196,7 +196,7 @@ Confirmamos que podemos obtener un **TGS (Ticket Granting Service)** del usuario
 
 Procedemos a crackear el hash con la herramienta `john`.
 
-<img src="/assets/HTB/Active/hash.png">
+<img src="/assets/HTB/Active/john.png">
 
 Verificamos con `crackmapexec` que la credencial sea válida.
 
