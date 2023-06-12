@@ -7,33 +7,43 @@ tags: [OSCP, AD, Tips]
 
 <img src="/assets/Tips/AD/ad.png">
 
-En el post de hoy voy a explicar los ataques más comunes que se pueden acontecer en un entorno de **Directorio Activo**. Todas estas técnicas se desarrollan sobre un entorno controla con una máquina `Windows Server 2016` como `Domain Controller` y dos equipos de usuario de dominio con `Windows 10`. Para saber cómo montar este lab podéis ver el vídeo en Youtube [PENTESTING EN ENTORNOS EMPRESARIALES](https://www.youtube.com/watch?v=-bNb4hwgkCo&t=2569s) dónde nuestro querido profesor **S4vitar** nos lo explica en detalle. Vamos al lío!
+En el post de hoy voy a explicar los ataques más comunes que se pueden acontecer en un entorno de **Directorio Activo** así como técnicas de **enumeración** y **persistencia**. Poco a poco iré actualizando el post con nueva información. Todas estas técnicas se desarrollan sobre un entorno controla con una máquina `Windows Server 2016` como `Domain Controller` y dos equipos de usuario de dominio con `Windows 10`. Para saber cómo montar este lab podéis ver el vídeo en Youtube [PENTESTING EN ENTORNOS EMPRESARIALES](https://www.youtube.com/watch?v=-bNb4hwgkCo&t=2569s) dónde nuestro querido profesor **S4vitar** nos lo explica en detalle. Vamos al lío!
 
-- **Enumeración con Crackmapexec**
-- **SMB Relay**
-- **Pass The Hash**
-- **Obteniendo Información de Usuarios**
-- **Enumeración LDAP**
-- **Kerbrute**
-- **Kerberoasting**
-- **AS-REP Roast**
-- **Golden Ticket**
-- **Rubeus - Kerberoasting**
-- **Rubeus - AS-REP Roast**
-- **Archivos SCF**
-- **Bloodhound & neo4j**
+- **Enumeración**
+    - **Crackmapexec**
+    - **Smbmap**
+    - **Nmap**
+- **Persistencia**
+    - **Cuenta Local**
+    - **Cuenta de Dominio**
+- **Ataques**
+    - **SMB Relay**
+    - **Pass The Hash**
+    - **Obteniendo Información de Usuarios**
+    - **Enumeración LDAP**
+    - **Kerbrute**
+    - **Kerberoasting**
+    - **AS-REP Roast**
+    - **Golden Ticket**
+    - **Rubeus - Kerberoasting**
+    - **Rubeus - AS-REP Roast**
+    - **Archivos SCF**
+    - **Bloodhound & neo4j**
+- **Créditos**
 
-## Enumeración con Crackmapexec
+## Enumeración
 
 * * *
 
-### Información de Red
+### Crackmapexec
+
+**Información de Red**
 
 Podemos usar `crackmapexec` para enumerar los equipos del dominio y verificar si tienen **SMB** firmado.
 
 <img src="/assets/Tips/AD/netenum.png">
 
-### Dumpeando la SAM
+**Dumpeando la SAM**
 
 Si conocemos las credenciales de un usuario, podríamos dumpear la `sam`:
 
@@ -41,29 +51,155 @@ Si conocemos las credenciales de un usuario, podríamos dumpear la `sam`:
 
 Aquí podemos ver que el usuario `jcampo` tiene privilegios sobre `ramlux`, lo cual es bastante peligroso y más si la contraseña de jcampo es muy débil.
 
-### Enumeración de Recursos Compartidos
+**Enumeración de Recursos Compartidos**
 
 Con el parámetro `--shares` podemos enumerar los recursos compartidos y el tipo de permisos (Lectura o Escritura) que tenemos sobre los mismos.
 
 <img src="/assets/Tips/AD/shares.png">
 
-### Spidering
+**Spidering**
 
 Existe un módulo en crackmapexec llamado `spider_plus`. Este módulo rastrea todos los recursos compartidos y directorios dentro de ellos de forma recursiva y le devuelve una salida limpia que le indica todos los archivos en cada recurso compartido que puede ver. Realmente quita todo el esfuerzo que necesita para ir a cada recurso compartido y enumerar todos los directorios manualmente. El comando debería ser algo como esto:
 
 <img src="/assets/Tips/AD/spider.png">
 
-### Authentication Sprying
+**Authentication Sprying**
 
 Con crackmapexec se podría realizar un ataque de `password sprying` para ver a qué sistemas puede conectarse:
 
 <img src="/assets/Tips/AD/spray.png">
 
-### Habilitar RDP
+**Habilitar RDP**
 
 Si tenemos credenicales de administrador podemos habilitar el **RDP** en todos los equipos del dominio.
 
 <img src="/assets/Tips/AD/rdp.png">
+
+### Smbmap
+
+**Listar recursos**
+
+```bash
+smbmap -H $ip
+```
+
+Esta herramienta funciona muy bien para enumerar y descargar archivos así como para lsyar recursos compartidos y permisos. Los hashes funcionan pero la ejecución de comandos no.
+
+```bash
+smbmap -u '' -p '' -H $ip # similar a crackmapexec --shares
+smbmap -u guest -p '' -H $ip
+smbmap -u Administrator -p aad3b435b51404eeaad3b435b51404ee:e101cbd92f05790d1a202bf91274f2e7 -H $ip
+smbmap -u Administrator -p aad3b435b51404eeaad3b435b51404ee:e101cbd92f05790d1a202bf91274f2e7 -H $ip -r # listar el directorio principal
+smbmap -u Administrator -p aad3b435b51404eeaad3b435b51404ee:e101cbd92f05790d1a202bf91274f2e7 -H $ip -R # listar todo de manera recursiva
+smbmap -u Administrator -p aad3b435b51404eeaad3b435b51404ee:e101cbd92f05790d1a202bf91274f2e7 -H $ip -s wwwroot -R -A '.*' # Descarga todo de manera recursiva. Está genial para cuando smbclient no funciona.
+smbmap -u Administrator -p aad3b435b51404eeaad3b435b51404ee:e101cbd92f05790d1a202bf91274f2e7 -H $ip -x whoami # no funciona
+```
+
+### Nmap
+
+**Enumeración de Recursos Compartidos**
+
+```bash
+nmap --script smb-enum-shares -p 139,445 $ip
+```
+
+**Enumeración Rápida**
+
+```bash
+nmap --script=smb-enum* --script-args=unsafe=1 -T5 $ip
+```
+
+**Enumeración rápida de vulnerabilidades**
+
+```bash
+nmap --script=smb-vuln* --script-args=unsafe=1 -T5 $ip
+```
+
+**Enumeración total y de vulnerabilidades**
+
+```bash
+nmap --script=smb2-capabilities,smb-print-text,smb2-security-mode.nse,smb-protocols,smb2-time.nse,smb-psexec,smb2-vuln-uptime,smb-security-mode,smb-server-stats,smb-double-pulsar-backdoor,smb-system-info,smb-vuln-conficker,smb-enum-groups,smb-vuln-cve2009-3103,smb-enum-processes,smb-vuln-cve-2017-7494,smb-vuln-ms06-025,smb-enum-shares,smb-vuln-ms07-029,smb-enum-users,smb-vuln-ms08-067,smb-vuln-ms10-054,smb-ls,smb-vuln-ms10-061,smb-vuln-ms17-010,smb-os-discovery --script-args=unsafe=1 -T5 $ip
+```
+
+```bash
+nmap -p139,445 -T4 -oN smb_vulns.txt -Pn --script 'not brute and not dos and smb-*' -vv -d $ip
+```
+
+## Persistencia
+
+### Cuenta Local
+
+**CMD**
+
+```bash
+ # Crear nuevo usuario
+ net user /add "<Username>" "<Password>"
+
+ # Añadir a grupo RDP
+ net localgroup "Remote Desktop Users" "<Username>" /add
+
+ # Añadir a administradores locales
+ net localgroup administrators "<Username>" /add
+```
+
+**PowerShell**
+
+```bash
+# Crear nuevo usuario
+New-LocalUser -Name "<Username>" -NoPassword
+
+ # Añadir a grupo RDP
+Add-LocalGroupMember -Group "Remote Desktop Users" -Member "<Username>"
+
+# Añadir a administradores locales
+Add-LocalGroupMember -Group "Administrators" -Member "<Username>"
+```
+
+### Cuenta de Dominio
+
+**CMD**
+
+```bash
+# Crear usuario de Dominio
+net user "<Username>" "<Password>" /add /domain
+
+# Añadir a grupo Domain Admins
+net group "Domain Admins" "<Username>" /add /domain
+```
+
+**Metasploit**
+
+```bash
+use post/windows/manage/add_user 
+
+# Change ADDTODOMAIN to FALSE to create local account
+
+   Name         Current Setting  Required  Description
+   ----         ---------------  --------  -----------
+   ADDTODOMAIN  true             yes       Add to Domain if true, otherwise add locally
+   ADDTOGROUP   true             yes       Add group if it does not exist
+   GROUP        Domain Admins    no        Add user into group, creating it if necessary
+   PASSWORD     Password123      no        Password of the user
+   SESSION      Session 1        yes       The session to run this module on
+   TOKEN                         no        Username or PID of the token which will be used (if blank, Domain Admin tokens will be enumerated)
+   USERNAME     Yorch            yes       The username of the user to add (not-qualified, e.g. BOB)
+```
+
+**PowerShell**
+
+```bash
+$Name = "<Username>"
+$Domain = "<Domain>"
+$Password = "Password123"
+$SecurePass = ConvertTo-SecureString -String $Password -AsPlainText -Force
+$NewUser = New-ADUser `
+    -Name "$Name"`
+    -SamAccountName "$Name"`
+    -UserPrincipalName "$Name@$Domain"`
+    -AccountPassword $SecurePass;  
+Enable-ADAccount -Identity "$Name";
+Add-ADGroupMember -Identity "Domain Admins" -Members "$Name"
+```
 
 ## SMB Relay
 
@@ -556,23 +692,14 @@ Kerbrute es una herramienta útil para enumerar usuarios de dominio a través de
 
 ## Kerberoasting
 
-Kerberoasting es una técnica que podemos usar para apuntar a cuentas de servicio en un entorno de Windows Active Directory. Aprovecha la forma en que funciona la autenticación Kerberos para los servicios que utilizan Kerberos para obtener vales de servicio.
+Los atacantes pueden abusar de un **Ticket-granting ticket (TGT)** de Kerberos o olfatear el tráfico de la red para obtener un **Ticket-Granting Service (TGS)** que puede ser vulnerable a la fuerza bruta.
+Los **Service Principal Names (SPN)** se usan para identificar de forma única cada instancia de un servicio de Windows. Para habilitar la autenticación, Kerberos requiere que los SPN estén asociados con al menos una cuenta de inicio de sesión de servicio (una cuenta específicamente encargada de ejecutar un servicio).
 
-Así es como funciona Kerberoasting:
+Los atacantes que posean un **Ticket-granting ticket (TGT)** de Kerberos pueden solicitar uno o más vales de **Ticket-Granting Service (TGS)** de Kerberos para cualquier SPN desde un controlador de dominio (DC). Es posible que partes de estos boletos se cifren con el algoritmo RC4, lo que significa que el hash Kerberos 5 TGS-REP etype 23 de la cuenta de servicio asociada con el SPN se usa como clave privada y, por lo tanto, es vulnerable a ataques de fuerza bruta fuera de línea que pueden exponer texto sin formato. cartas credenciales.
 
-- Comenzamos por identificar las cuentas de servicio en el entorno de Active Directory. Estas cuentas de servicio generalmente se usan para ejecutar varios servicios o aplicaciones.
+[Fuente](https://attack.mitre.org/techniques/T1558/003/)
 
-- A continuación, consultamos Active Directory en busca de cuentas de servicio que tengan nombres principales de servicio (SPN) asociados. Los SPN identifican de forma única los servicios registrados en el dominio.
-
-- Una vez que tenemos una lista de cuentas de servicio con SPN, solicitamos un ticket de servicio (TGS) para cada una de estas cuentas. Para ello, utilizamos nuestra cuenta de usuario habitual y proporcionamos el SPN de la cuenta de servicio a la que queremos apuntar.
-
-- El controlador de dominio emite un ticket de servicio encriptado con la contraseña de la cuenta de servicio, que no conocemos.
-
-- Extraemos los tickets de servicio cifrados y los guardamos en un archivo.
-
-- Ahora, podemos usar una herramienta como **john** para forzar la contraseña de la cuenta de servicio sin conexión a la fuerza bruta y obtener la contraseña de texto sin formato. john realiza un ataque de diccionario o de fuerza bruta contra el ticket de servicio encriptado para descifrar la contraseña.
-
-Con la contraseña de texto sin formato en nuestro poder, potencialmente podemos acceder a otros sistemas o servicios que usan las mismas credenciales. Esto puede conducir a una mayor escalada de privilegios y un movimiento lateral dentro de la red.
+Los hashes descifrados pueden habilitar la persistencia, la escalada de privilegios y el movimiento lateral a través del acceso a cuentas válidas.
 
 Para este ataque utilizaremos la herramienta **GetUserSPN.py**:
 
@@ -758,23 +885,11 @@ Aunque el Administrador cambie su contraseña ya que tenemos persistencia absolu
 
 ## Rubeus - Kerberoasting
 
-La diferencia entre Kerberoasting regular y Rubeus Kerberoasting radica en las herramientas utilizadas para realizar el ataque y las funciones adicionales proporcionadas por Rubeus.
+Kerberoasting es una técnica que permite a un atacante robar el ticket **KRB_TGS**, que está encriptado con RC4, para forzar el hash de los servicios de la aplicación para extraer su contraseña. Kerberos utiliza el hash NTLM del servicio solicitado para cifrar el vale KRB_TGS para los nombres principales de servicio (SPN) dados. Cuando un usuario de dominio envía una solicitud de ticket TGS al controlador de dominio KDC para cualquier servicio que tenga SPN registrado, el KDC genera el KRB_TGS sin identificar la autorización del usuario contra el servicio solicitado.
 
-Kerberoasting regular generalmente se refiere a la técnica o concepto general de explotar la vulnerabilidad en Kerberos para extraer y descifrar contraseñas de cuentas de servicio. Implica identificar cuentas de servicio, solicitar tickets de servicio (TGS) para esas cuentas y descifrar fuera de línea los tickets de servicio cifrados para obtener las contraseñas de texto sin formato. El Kerberoasting regular se puede realizar usando varias herramientas y scripts, o incluso manualmente.
+Un atacante puede utilizar este ticket sin conexión para forzar la contraseña de la cuenta de servicio, ya que el ticket se ha cifrado en RC4 con el hash NTLM de la cuenta de servicio.
 
-Por otro lado, Rubeus es una herramienta específica desarrollada por **Harmj0y** como parte del framework Impacket. Rubeus está diseñado para ayudar en varios ataques relacionados con Kerberos, incluido Kerberoasting. Proporciona funcionalidades y características adicionales destinadas específicamente a simplificar y automatizar el proceso de Kerberoasting. Algunas diferencias y ventajas notables de Rubeus Kerberoasting incluyen:
-
-- **Funcionalidad mejorada**: Rubeus proporciona una funcionalidad integrada para enumerar cuentas de servicio, solicitar tickets de servicio y realizar descifrado fuera de línea. Simplifica los pasos involucrados en el proceso de ataque Kerberoasting.
-
-- **Ataques de diccionario y de fuerza bruta**: Rubeus admite métodos de descifrado de contraseñas tanto basados ​​en diccionario como de fuerza bruta contra los tickets de servicio cifrados. Proporciona opciones para especificar listas de palabras personalizadas y reglas de complejidad de contraseña.
-
-- **Opciones de filtrado**: Rubeus permite filtrar las cuentas de servicio según varios criterios, como el nombre de SPN, el nombre de la cuenta o grupos de usuarios específicos. Esto permite ataques Kerberoasting más dirigidos y eficientes.
-
-- **Automatización y secuencias de comandos**: Rubeus puede generar secuencias de comandos y automatizarse, lo que permite el procesamiento por lotes de múltiples cuentas de servicio. Esto puede ser especialmente útil cuando se trata de una gran cantidad de cuentas de servicio en el dominio.
-
-- **Funciones ampliadas**: Rubeus ofrece funciones adicionales más allá de Kerberoasting, como captura de boletos, ataques de pase de boleto y generación de Golden Ticket. Estas características hacen de Rubeus una herramienta versátil para varios ataques relacionados con Kerberos.
-
-En resumen, mientras que Kerberoasting regular se refiere a la técnica general de explotar las vulnerabilidades de Kerberos para descifrar las contraseñas de las cuentas de servicio, Rubeus Kerberoasting se refiere específicamente al uso de la herramienta Rubeus para automatizar y simplificar el proceso de Kerberoasting al tiempo que proporciona funciones y flexibilidad adicionales.
+[Fuente](https://www.hackingarticles.in/a-detailed-guide-on-rubeus/)
 
 Primero nos descargamos la herramienta [Rubeus](https://github.com/r3motecontrol/Ghostpack-CompiledBinaries) a nuestro directorio de trabajo y la subimos a la máquina víctima:
 
@@ -792,23 +907,11 @@ Esto es lo mismo que el kerberoasting habitual, podemos usar cualquier credencia
 
 ## Rubeus - AS-REP Roast
 
-El ataque AS-REP Roasting es una técnica utilizada para extraer mensajes cifrados AS-REP (respuesta del servicio de autenticación) de un controlador de dominio en un entorno de Windows Active Directory. Se dirige a las cuentas de usuario que tienen habilitada la marca "No requiere autenticación previa de Kerberos", lo que permite extraer el mensaje AS-REP cifrado y potencialmente descifrarlo sin conexión.
+El ataque **AS-REP Roast** es una técnica ofensiva contra Kerberos que permite recuperar hashes de contraseña para usuarios que no requieren autenticación previa. Si el usuario tiene habilitada la opción "No usar la autenticación previa de Kerberos", un atacante puede recuperar un AS-REP de Kerberos cifrado con la contraseña RC4-HMAC del usuario y puede intentar descifrar este ticket sin conexión.
 
-La principal diferencia entre un ataque regular de AS-REP Roast y un ataque de AS-REP Roast con Rubeus radica en las herramientas utilizadas y las características adicionales proporcionadas por Rubeus.
+La autenticación previa es la etapa inicial en la autenticación Kerberos, que es administrada por el servidor de autenticación KDC y está destinada a evitar ataques de fuerza bruta.
 
-- En un ataque regular de AS-REP Roast, normalmente usaría métodos manuales o secuencias de comandos personalizadas para identificar las cuentas de usuario con el indicador de autenticación previa deshabilitado, extraer los mensajes de AS-REP e intentar descifrarlos utilizando técnicas fuera de línea como diccionario o ataques de fuerza bruta. .
-
-- Rubeus, por otro lado, es una herramienta dentro del marco de Impacket diseñada específicamente para automatizar y simplificar los ataques relacionados con Kerberos. Proporciona funcionalidades para realizar ataques AS-REP Roasting y ofrece varias ventajas:
-
-- AS-REP Roasting automatizado: Rubeus agiliza el proceso de tueste AS-REP al automatizar la extracción de mensajes AS-REP del controlador de dominio.
-
-- Funcionalidad mejorada: Rubeus proporciona características adicionales más allá de AS-REP Roasting, como la capacidad de solicitar y extraer boletos TGT (Ticket Granting Ticket), manipular boletos de Kerberos, realizar ataques de pase de boleto y más.
-
-- Formatos de salida flexibles: Rubeus ofrece opciones para generar los mensajes AS-REP extraídos en varios formatos, lo que facilita el procesamiento y el análisis de los resultados.
-
-- Técnicas de ataque adicionales: Rubeus incluye otras técnicas de ataque relacionadas con Kerberos, como Kerberoasting, ataques Golden Ticket y ataques Silver Ticket, lo que permite una gama más amplia de escenarios de ataque.
-
-En resumen, mientras que tanto los ataques regulares de AS-REP Roast como los ataques de AS-REP Roast que utilizan Rubeus tienen como objetivo la misma vulnerabilidad, Rubeus proporciona un enfoque más simplificado y rico en funciones para automatizar el proceso de ataque, extraer mensajes de AS-REP y ejecutar Kerberos adicionales.
+[Fuente](https://www.hackingarticles.in/as-rep-roasting/)
 
 Ejecutamos de la siguiente forma:
 
@@ -818,11 +921,11 @@ Lo mismo que de costumbre. Ahora puede copiar el hash y descifrarlo, como hicimo
 
 ## Archivos SCF
 
-Un archivo **SCF**, también conocido como **Shell Command File**, es un formato de archivo utilizado en los sistemas operativos Windows. Se asocia principalmente con Windows Explorer Shell, que proporciona la interfaz gráfica de usuario (GUI) para interactuar con archivos, carpetas y operaciones del sistema.
+No es nuevo que los archivos **SCF (Shell Command Files)** se puedan usar para realizar un conjunto limitado de operaciones, como mostrar el escritorio de Windows o abrir un explorador de Windows. Sin embargo, se puede usar un archivo SCF para acceder a una ruta UNC específica que permite al probador de penetración crear un ataque. El código a continuación se puede observar la estructura de un archivo SCF. Se debe colocar dentro de un archivo de texto que luego se debe plantar en un recurso compartido de red.
 
-Un archivo SCF es un archivo de texto que contiene una serie de comandos que se ejecutan cuando se abre o se accede al archivo. Estos comandos pueden incluir varias acciones, como iniciar aplicaciones, ejecutar scripts o realizar operaciones del sistema.
+<img src="/assets/Tips/AD/scf.png">
 
-En el contexto de Windows, los archivos SCF se utilizan normalmente con fines de personalización y automatización. Los usuarios pueden crear archivos SCF para realizar tareas específicas o automatizar acciones repetitivas. Por ejemplo, un archivo SCF puede contener comandos para abrir carpetas específicas, iniciar aplicaciones con configuraciones predefinidas o realizar configuraciones del sistema.
+[Fuente](https://pentestlab.blog/2017/12/13/smb-share-scf-file-attacks/)
 
 Primero listamos los recursos compartidos a nivel de red para el usuario `jcampo` en el DC:
 
@@ -886,3 +989,11 @@ En este punto en la pestaña de `Analysis` podemos ejecutar un amplia opción de
 <img src="/assets/Tips/AD/dnsync.png">
 
 Para ver un ejemplo práctico más detallado podéis ver el writeup de la máquina [Sauna](https://yorch82.github.io/posts/HTB-Sauna/) de HackTheBox que tengo en mi blog.
+
+## Créditos
+
+A continuación os dejo los enlaces de donde he podido extraer toda esta información tan valiosa:
+
+- [S4vitar](https://www.youtube.com/watch?v=-bNb4hwgkCo) - Aquí nuestro profe y mentor nos explica cómo montar el Lab para practicar todos los ataques.
+- [Pentest Everything](https://viperone.gitbook.io/pentest-everything/) -> Increíble blog de **Viperone** con muchísimos recursos de Pentesting, os recomiendo su lectura.
+- [OSCP Playbook](https://fareedfauzi.gitbook.io/oscp-playbook/) -> Otro gran recurso de **Fareedfauzi** con una tonelada de recursos enfocados a la certificación OSCP.
